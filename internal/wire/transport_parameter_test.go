@@ -41,6 +41,7 @@ var _ = Describe("Transport Parameters", func() {
 	}
 
 	It("has a string representation", func() {
+		minAckDelay := 1337 * time.Microsecond
 		p := &TransportParameters{
 			InitialMaxStreamDataBidiLocal:   1234,
 			InitialMaxStreamDataBidiRemote:  2345,
@@ -57,11 +58,12 @@ var _ = Describe("Transport Parameters", func() {
 			StatelessResetToken:             &protocol.StatelessResetToken{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00},
 			ActiveConnectionIDLimit:         123,
 			MaxDatagramFrameSize:            876,
+			MinAckDelay:                     &minAckDelay,
 		}
-		Expect(p.String()).To(Equal("&wire.TransportParameters{OriginalDestinationConnectionID: deadbeef, InitialSourceConnectionID: decafbad, RetrySourceConnectionID: deadc0de, InitialMaxStreamDataBidiLocal: 1234, InitialMaxStreamDataBidiRemote: 2345, InitialMaxStreamDataUni: 3456, InitialMaxData: 4567, MaxBidiStreamNum: 1337, MaxUniStreamNum: 7331, MaxIdleTimeout: 42s, AckDelayExponent: 14, MaxAckDelay: 37ms, ActiveConnectionIDLimit: 123, StatelessResetToken: 0x112233445566778899aabbccddeeff00, MaxDatagramFrameSize: 876}"))
+		Expect(p.String()).To(Equal("&wire.TransportParameters{OriginalDestinationConnectionID: deadbeef, InitialSourceConnectionID: decafbad, RetrySourceConnectionID: deadc0de, InitialMaxStreamDataBidiLocal: 1234, InitialMaxStreamDataBidiRemote: 2345, InitialMaxStreamDataUni: 3456, InitialMaxData: 4567, MaxBidiStreamNum: 1337, MaxUniStreamNum: 7331, MaxIdleTimeout: 42s, AckDelayExponent: 14, MaxAckDelay: 37ms, ActiveConnectionIDLimit: 123, StatelessResetToken: 0x112233445566778899aabbccddeeff00, MaxDatagramFrameSize: 876, MinAckDelay: 1.337ms}"))
 	})
 
-	It("has a string representation, if there's no stateless reset token, no Retry source connection id and no datagram support", func() {
+	It("has a string representation, if there's no stateless reset token, no Retry source connection id, no datagram and ack-frequency support", func() {
 		p := &TransportParameters{
 			InitialMaxStreamDataBidiLocal:   1234,
 			InitialMaxStreamDataBidiRemote:  2345,
@@ -83,6 +85,7 @@ var _ = Describe("Transport Parameters", func() {
 	It("marshals and unmarshals", func() {
 		var token protocol.StatelessResetToken
 		rand.Read(token[:])
+		minAckDelay := 1337 * time.Microsecond
 		params := &TransportParameters{
 			InitialMaxStreamDataBidiLocal:   protocol.ByteCount(getRandomValue()),
 			InitialMaxStreamDataBidiRemote:  protocol.ByteCount(getRandomValue()),
@@ -100,6 +103,7 @@ var _ = Describe("Transport Parameters", func() {
 			MaxAckDelay:                     42 * time.Millisecond,
 			ActiveConnectionIDLimit:         getRandomValue(),
 			MaxDatagramFrameSize:            protocol.ByteCount(getRandomValue()),
+			MinAckDelay:                     &minAckDelay,
 		}
 		data := params.Marshal(protocol.PerspectiveServer)
 
@@ -121,6 +125,8 @@ var _ = Describe("Transport Parameters", func() {
 		Expect(p.MaxAckDelay).To(Equal(42 * time.Millisecond))
 		Expect(p.ActiveConnectionIDLimit).To(Equal(params.ActiveConnectionIDLimit))
 		Expect(p.MaxDatagramFrameSize).To(Equal(params.MaxDatagramFrameSize))
+		Expect(p.MinAckDelay).ToNot(BeNil())
+		Expect(*p.MinAckDelay).To(Equal(1337 * time.Microsecond))
 	})
 
 	It("doesn't marshal a retry_source_connection_id, if no Retry was performed", func() {

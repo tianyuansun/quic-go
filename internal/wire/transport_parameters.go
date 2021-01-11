@@ -44,6 +44,8 @@ const (
 	retrySourceConnectionIDParameterID         transportParameterID = 0x10
 	// RFC 9221
 	maxDatagramFrameSizeParameterID transportParameterID = 0x20
+	// https://datatracker.ietf.org/doc/html/draft-ietf-quic-ack-frequency-02
+	minAckDelayParameterID transportParameterID = 0xff03de1a
 )
 
 // PreferredAddress is the value encoding in the preferred_address transport parameter
@@ -85,6 +87,7 @@ type TransportParameters struct {
 	ActiveConnectionIDLimit uint64
 
 	MaxDatagramFrameSize protocol.ByteCount
+	MinAckDelay          *time.Duration
 }
 
 // Unmarshal the transport parameters
@@ -137,7 +140,8 @@ func (p *TransportParameters) unmarshal(r *bytes.Reader, sentBy protocol.Perspec
 			maxAckDelayParameterID,
 			activeConnectionIDLimitParameterID,
 			maxDatagramFrameSizeParameterID,
-			ackDelayExponentParameterID:
+			ackDelayExponentParameterID,
+			minAckDelayParameterID:
 			if err := p.readNumericTransportParameter(r, paramID, int(paramLen)); err != nil {
 				return err
 			}
@@ -305,6 +309,9 @@ func (p *TransportParameters) readNumericTransportParameter(
 		p.ActiveConnectionIDLimit = val
 	case maxDatagramFrameSizeParameterID:
 		p.MaxDatagramFrameSize = protocol.ByteCount(val)
+	case minAckDelayParameterID:
+		mad := time.Duration(val) * time.Microsecond
+		p.MinAckDelay = &mad
 	default:
 		return fmt.Errorf("TransportParameter BUG: transport parameter %d not found", paramID)
 	}
@@ -394,6 +401,9 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	if p.MaxDatagramFrameSize != protocol.InvalidByteCount {
 		p.marshalVarintParam(b, maxDatagramFrameSizeParameterID, uint64(p.MaxDatagramFrameSize))
 	}
+	if p.MinAckDelay != nil {
+		p.marshalVarintParam(b, minAckDelayParameterID, uint64(*p.MinAckDelay/time.Microsecond))
+	}
 	return b.Bytes()
 }
 
@@ -470,6 +480,10 @@ func (p *TransportParameters) String() string {
 	if p.MaxDatagramFrameSize != protocol.InvalidByteCount {
 		logString += ", MaxDatagramFrameSize: %d"
 		logParams = append(logParams, p.MaxDatagramFrameSize)
+	}
+	if p.MinAckDelay != nil {
+		logString += ", MinAckDelay: %s"
+		logParams = append(logParams, *p.MinAckDelay)
 	}
 	logString += "}"
 	return fmt.Sprintf(logString, logParams...)
