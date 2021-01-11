@@ -8,21 +8,26 @@ import (
 
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/internal/qerr"
+	"github.com/lucas-clemente/quic-go/quicvarint"
 )
+
+var errUnknownFrame = errors.New("unknown frame type")
 
 type frameParser struct {
 	ackDelayExponent uint8
 
-	supportsDatagrams bool
+	supportsDatagrams   bool
+	supportAckFrequency bool
 
 	version protocol.VersionNumber
 }
 
 // NewFrameParser creates a new frame parser.
-func NewFrameParser(supportsDatagrams bool, v protocol.VersionNumber) FrameParser {
+func NewFrameParser(supportsDatagrams, supportsAckFrequency bool, v protocol.VersionNumber) FrameParser {
 	return &frameParser{
-		supportsDatagrams: supportsDatagrams,
-		version:           v,
+		supportsDatagrams:   supportsDatagrams,
+		supportAckFrequency: supportsAckFrequency,
+		version:             v,
 	}
 }
 
@@ -30,16 +35,23 @@ func NewFrameParser(supportsDatagrams bool, v protocol.VersionNumber) FrameParse
 // It skips PADDING frames.
 func (p *frameParser) ParseNext(r *bytes.Reader, encLevel protocol.EncryptionLevel) (Frame, error) {
 	for r.Len() != 0 {
-		typeByte, _ := r.ReadByte()
-		if typeByte == 0x0 { // PADDING frame
+		typLen := r.Len()
+		typ, err := quicvarint.Read(r)
+		if err != nil {
+			return nil, err
+		}
+		typLen -= r.Len()
+		if typ == 0x0 { // PADDING frame
 			continue
 		}
-		r.UnreadByte()
+		for i := 0; i < typLen; i++ {
+			r.UnreadByte()
+		}
 
-		f, err := p.parseFrame(r, typeByte, encLevel)
+		f, err := p.parseFrame(r, typ, encLevel)
 		if err != nil {
 			return nil, &qerr.TransportError{
-				FrameType:    uint64(typeByte),
+				FrameType:    typ,
 				ErrorCode:    qerr.FrameEncodingError,
 				ErrorMessage: err.Error(),
 			}
@@ -49,13 +61,13 @@ func (p *frameParser) ParseNext(r *bytes.Reader, encLevel protocol.EncryptionLev
 	return nil, nil
 }
 
-func (p *frameParser) parseFrame(r *bytes.Reader, typeByte byte, encLevel protocol.EncryptionLevel) (Frame, error) {
+func (p *frameParser) parseFrame(r *bytes.Reader, typ uint64, encLevel protocol.EncryptionLevel) (Frame, error) {
 	var frame Frame
 	var err error
-	if typeByte&0xf8 == 0x8 {
+	if typ&0xf8 == 0x8 {
 		frame, err = parseStreamFrame(r, p.version)
 	} else {
-		switch typeByte {
+		switch typ {
 		case 0x1:
 			frame, err = parsePingFrame(r, p.version)
 		case 0x2, 0x3:
@@ -97,13 +109,19 @@ func (p *frameParser) parseFrame(r *bytes.Reader, typeByte byte, encLevel protoc
 		case 0x1e:
 			frame, err = parseHandshakeDoneFrame(r, p.version)
 		case 0x30, 0x31:
-			if p.supportsDatagrams {
-				frame, err = parseDatagramFrame(r, p.version)
+			if !p.supportsDatagrams {
+				err = errUnknownFrame
 				break
 			}
-			fallthrough
+			frame, err = parseDatagramFrame(r, p.version)
+		case 0xaf:
+			if !p.supportAckFrequency {
+				err = errUnknownFrame
+				break
+			}
+			frame, err = parseAckFrequencyFrame(r, p.version)
 		default:
-			err = errors.New("unknown frame type")
+			err = errUnknownFrame
 		}
 	}
 	if err != nil {

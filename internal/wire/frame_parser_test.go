@@ -18,7 +18,7 @@ var _ = Describe("Frame parsing", func() {
 
 	BeforeEach(func() {
 		buf = &bytes.Buffer{}
-		parser = NewFrameParser(true, protocol.Version1)
+		parser = NewFrameParser(true, true, protocol.Version1)
 	})
 
 	It("returns nil if there's nothing more to read", func() {
@@ -290,7 +290,7 @@ var _ = Describe("Frame parsing", func() {
 	})
 
 	It("errors when DATAGRAM frames are not supported", func() {
-		parser = NewFrameParser(false, protocol.Version1)
+		parser = NewFrameParser(false, true, protocol.Version1)
 		f := &DatagramFrame{Data: []byte("foobar")}
 		buf := &bytes.Buffer{}
 		Expect(f.Write(buf, protocol.Version1)).To(Succeed())
@@ -302,11 +302,33 @@ var _ = Describe("Frame parsing", func() {
 		}))
 	})
 
+	It("unpacks ACK_FREQUENCY frames", func() {
+		f := &AckFrequencyFrame{
+			SequenceNumber:    123,
+			Threshold:         345,
+			UpdateMaxAckDelay: 678 * time.Microsecond,
+			IgnoreOrder:       true,
+		}
+		Expect(f.Write(buf, protocol.Version1)).To(Succeed())
+		frame, err := parser.ParseNext(bytes.NewReader(buf.Bytes()), protocol.Encryption1RTT)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(frame).To(Equal(f))
+	})
+
+	It("errors when ACK_FREQUENCY frames are not supported", func() {
+		parser = NewFrameParser(true, false, protocol.Version1)
+		f := &AckFrequencyFrame{}
+		buf := &bytes.Buffer{}
+		Expect(f.Write(buf, protocol.Version1)).To(Succeed())
+		_, err := parser.ParseNext(bytes.NewReader(buf.Bytes()), protocol.Encryption1RTT)
+		Expect(err).To(MatchError("FRAME_ENCODING_ERROR (frame type: 0xaf): unknown frame type"))
+	})
+
 	It("errors on invalid type", func() {
-		_, err := parser.ParseNext(bytes.NewReader([]byte{0x42}), protocol.Encryption1RTT)
+		_, err := parser.ParseNext(bytes.NewReader([]byte{42}), protocol.Encryption1RTT)
 		Expect(err).To(MatchError(&qerr.TransportError{
 			ErrorCode:    qerr.FrameEncodingError,
-			FrameType:    0x42,
+			FrameType:    42,
 			ErrorMessage: "unknown frame type",
 		}))
 	})
