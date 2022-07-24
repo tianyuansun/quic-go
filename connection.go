@@ -1166,7 +1166,7 @@ func (s *connection) handleUnpackedPacket(
 	// If we're not tracing, this slice will always remain empty.
 	var frames []wire.Frame
 	r := bytes.NewReader(packet.data)
-	var isAckEliciting bool
+	var isAckEliciting, forceAck bool
 	for {
 		frame, err := s.frameParser.ParseNext(r, packet.encryptionLevel)
 		if err != nil {
@@ -1177,6 +1177,9 @@ func (s *connection) handleUnpackedPacket(
 		}
 		if ackhandler.IsFrameAckEliciting(frame) {
 			isAckEliciting = true
+		}
+		if _, ok := frame.(*wire.AckFrequencyFrame); ok {
+			forceAck = true
 		}
 		// Only process frames now if we're not logging.
 		// If we're logging, we need to make sure that the packet_received event is logged first.
@@ -1202,7 +1205,7 @@ func (s *connection) handleUnpackedPacket(
 		}
 	}
 
-	return s.receivedPacketHandler.ReceivedPacket(packet.packetNumber, ecn, packet.encryptionLevel, rcvTime, isAckEliciting)
+	return s.receivedPacketHandler.ReceivedPacket(packet.packetNumber, ecn, packet.encryptionLevel, rcvTime, isAckEliciting, forceAck)
 }
 
 func (s *connection) handleFrame(f wire.Frame, encLevel protocol.EncryptionLevel, destConnID protocol.ConnectionID) error {

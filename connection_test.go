@@ -749,7 +749,7 @@ var _ = Describe("Connection", func() {
 			rph := mockackhandler.NewMockReceivedPacketHandler(mockCtrl)
 			gomock.InOrder(
 				rph.EXPECT().IsPotentiallyDuplicate(protocol.PacketNumber(0x1337), protocol.EncryptionInitial),
-				rph.EXPECT().ReceivedPacket(protocol.PacketNumber(0x1337), protocol.ECNCE, protocol.EncryptionInitial, rcvTime, false),
+				rph.EXPECT().ReceivedPacket(protocol.PacketNumber(0x1337), protocol.ECNCE, protocol.EncryptionInitial, rcvTime, false, false),
 			)
 			conn.receivedPacketHandler = rph
 			packet.rcvTime = rcvTime
@@ -778,7 +778,7 @@ var _ = Describe("Connection", func() {
 			rph := mockackhandler.NewMockReceivedPacketHandler(mockCtrl)
 			gomock.InOrder(
 				rph.EXPECT().IsPotentiallyDuplicate(protocol.PacketNumber(0x1337), protocol.Encryption1RTT),
-				rph.EXPECT().ReceivedPacket(protocol.PacketNumber(0x1337), protocol.ECT1, protocol.Encryption1RTT, rcvTime, true),
+				rph.EXPECT().ReceivedPacket(protocol.PacketNumber(0x1337), protocol.ECT1, protocol.Encryption1RTT, rcvTime, true, false),
 			)
 			conn.receivedPacketHandler = rph
 			packet.rcvTime = rcvTime
@@ -1300,7 +1300,7 @@ var _ = Describe("Connection", func() {
 			conn.handshakeConfirmed = true
 			runConn()
 			packer.EXPECT().PackPacket().Return(nil, nil).AnyTimes()
-			conn.receivedPacketHandler.ReceivedPacket(0x035e, protocol.ECNNon, protocol.Encryption1RTT, time.Now(), true)
+			conn.receivedPacketHandler.ReceivedPacket(0x035e, protocol.ECNNon, protocol.Encryption1RTT, time.Now(), true, false)
 			conn.scheduleSending()
 			time.Sleep(50 * time.Millisecond) // make sure there are no calls to mconn.Write()
 		})
@@ -2103,7 +2103,7 @@ var _ = Describe("Connection", func() {
 		BeforeEach(func() {
 			conn.config.MaxIdleTimeout = 30 * time.Second
 			conn.config.KeepAlivePeriod = 15 * time.Second
-			conn.receivedPacketHandler.ReceivedPacket(0, protocol.ECNNon, protocol.EncryptionHandshake, time.Now(), true)
+			conn.receivedPacketHandler.ReceivedPacket(0, protocol.ECNNon, protocol.EncryptionHandshake, time.Now(), true, false)
 		})
 
 		AfterEach(func() {

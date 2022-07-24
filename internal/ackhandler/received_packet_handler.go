@@ -40,25 +40,25 @@ func (h *receivedPacketHandler) ReceivedPacket(pn protocol.PacketNumber,
 	ecn protocol.ECN,
 	encLevel protocol.EncryptionLevel,
 	rcvTime time.Time,
-	isAckEliciting bool,
+	isAckEliciting, forceAck bool,
 ) error {
 	h.sentPackets.ReceivedPacket(encLevel)
 	switch encLevel {
 	case protocol.EncryptionInitial:
-		h.initialPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
+		h.initialPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting, forceAck)
 	case protocol.EncryptionHandshake:
-		h.handshakePackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
+		h.handshakePackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting, forceAck)
 	case protocol.Encryption0RTT:
 		if h.lowest1RTTPacket != protocol.InvalidPacketNumber && pn > h.lowest1RTTPacket {
 			return fmt.Errorf("received packet number %d on a 0-RTT packet after receiving %d on a 1-RTT packet", pn, h.lowest1RTTPacket)
 		}
-		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
+		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting, forceAck)
 	case protocol.Encryption1RTT:
 		if h.lowest1RTTPacket == protocol.InvalidPacketNumber || pn < h.lowest1RTTPacket {
 			h.lowest1RTTPacket = pn
 		}
 		h.appDataPackets.IgnoreBelow(h.sentPackets.GetLowestPacketNotConfirmedAcked())
-		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
+		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting, forceAck)
 	default:
 		panic(fmt.Sprintf("received packet with unknown encryption level: %s", encLevel))
 	}

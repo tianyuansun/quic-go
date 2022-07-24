@@ -53,7 +53,7 @@ func newReceivedPacketTracker(
 	}
 }
 
-func (h *receivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, isAckEliciting bool) {
+func (h *receivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, isAckEliciting, forceAck bool) {
 	if pn < h.ignoreBelow {
 		return
 	}
@@ -67,9 +67,15 @@ func (h *receivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, ecn pro
 	if isNew := h.packetHistory.ReceivedPacket(pn); isNew && isAckEliciting {
 		h.hasNewAck = true
 	}
-	if isAckEliciting {
+	if forceAck {
+		h.hasNewAck = true
+		h.ackQueued = true
+		// cancel the ack alarm
+		h.ackAlarm = time.Time{}
+	} else if isAckEliciting {
 		h.maybeQueueAck(pn, rcvTime, isMissing)
 	}
+
 	switch ecn {
 	case protocol.ECNNon:
 	case protocol.ECT0:
