@@ -33,7 +33,7 @@ var _ = Describe("PingFrame", func() {
 
 		It("has the correct min length", func() {
 			frame := PingFrame{}
-			Expect(frame.Length(0)).To(Equal(protocol.ByteCount(1)))
+			Expect(frame.Length(protocol.VersionWhatever)).To(Equal(protocol.ByteCount(1)))
 		})
 	})
 })
