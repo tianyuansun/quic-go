@@ -13,9 +13,8 @@ import (
 var _ = Describe("CRYPTO frame", func() {
 	Context("when parsing", func() {
 		It("parses", func() {
-			data := []byte{0x6}
-			data = append(data, encodeVarInt(0xdecafbad)...) // offset
-			data = append(data, encodeVarInt(6)...)          // length
+			data := encodeVarInt(0xdecafbad)        // offset
+			data = append(data, encodeVarInt(6)...) // length
 			data = append(data, []byte("foobar")...)
 			r := bytes.NewReader(data)
 			frame, err := parseCryptoFrame(r, protocol.Version1)
@@ -26,9 +25,8 @@ var _ = Describe("CRYPTO frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := []byte{0x6}
-			data = append(data, encodeVarInt(0xdecafbad)...) // offset
-			data = append(data, encodeVarInt(6)...)          // data length
+			data := encodeVarInt(0xdecafbad)        // offset
+			data = append(data, encodeVarInt(6)...) // data length
 			data = append(data, []byte("foobar")...)
 			_, err := parseCryptoFrame(bytes.NewReader(data), protocol.Version1)
 			Expect(err).NotTo(HaveOccurred())

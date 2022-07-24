@@ -16,12 +16,9 @@ type ResetStreamFrame struct {
 }
 
 func parseResetStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*ResetStreamFrame, error) {
-	if _, err := r.ReadByte(); err != nil { // read the TypeByte
-		return nil, err
-	}
-
 	var streamID protocol.StreamID
 	var byteOffset protocol.ByteCount
+
 	sid, err := quicvarint.Read(r)
 	if err != nil {
 		return nil, err
@@ -53,6 +50,6 @@ func (f *ResetStreamFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) erro
 }
 
 // Length of a written frame
-func (f *ResetStreamFrame) Length(version protocol.VersionNumber) protocol.ByteCount {
+func (f *ResetStreamFrame) Length(_ protocol.VersionNumber) protocol.ByteCount {
 	return 1 + quicvarint.Len(uint64(f.StreamID)) + quicvarint.Len(uint64(f.ErrorCode)) + quicvarint.Len(uint64(f.FinalSize))
 }

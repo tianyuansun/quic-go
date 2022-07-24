@@ -20,15 +20,10 @@ type StreamFrame struct {
 	fromPool bool
 }
 
-func parseStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*StreamFrame, error) {
-	typeByte, err := r.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	hasOffset := typeByte&0x4 > 0
-	fin := typeByte&0x1 > 0
-	hasDataLen := typeByte&0x2 > 0
+func parseStreamFrame(r *bytes.Reader, typ uint64, _ protocol.VersionNumber) (*StreamFrame, error) {
+	hasOffset := typ&0x4 > 0
+	fin := typ&0x1 > 0
+	hasDataLen := typ&0x2 > 0
 
 	streamID, err := quicvarint.Read(r)
 	if err != nil {

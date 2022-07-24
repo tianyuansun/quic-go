@@ -14,8 +14,7 @@ var _ = Describe("NEW_TOKEN frame", func() {
 	Context("parsing", func() {
 		It("accepts a sample frame", func() {
 			token := "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
-			data := []byte{0x7}
-			data = append(data, encodeVarInt(uint64(len(token)))...)
+			data := encodeVarInt(uint64(len(token)))
 			data = append(data, token...)
 			b := bytes.NewReader(data)
 			f, err := parseNewTokenFrame(b, protocol.VersionWhatever)
@@ -25,8 +24,7 @@ var _ = Describe("NEW_TOKEN frame", func() {
 		})
 
 		It("rejects empty tokens", func() {
-			data := []byte{0x7}
-			data = append(data, encodeVarInt(uint64(0))...)
+			data := encodeVarInt(uint64(0))
 			b := bytes.NewReader(data)
 			_, err := parseNewTokenFrame(b, protocol.VersionWhatever)
 			Expect(err).To(MatchError("token must not be empty"))
@@ -34,8 +32,7 @@ var _ = Describe("NEW_TOKEN frame", func() {
 
 		It("errors on EOFs", func() {
 			token := "Lorem ipsum dolor sit amet, consectetur adipiscing elit"
-			data := []byte{0x7}
-			data = append(data, encodeVarInt(uint64(len(token)))...)
+			data := encodeVarInt(uint64(len(token)))
 			data = append(data, token...)
 			_, err := parseNewTokenFrame(bytes.NewReader(data), protocol.VersionWhatever)
 			Expect(err).NotTo(HaveOccurred())

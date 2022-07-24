@@ -9,13 +9,6 @@ import (
 // A PingFrame is a PING frame
 type PingFrame struct{}
 
-func parsePingFrame(r *bytes.Reader, _ protocol.VersionNumber) (*PingFrame, error) {
-	if _, err := r.ReadByte(); err != nil {
-		return nil, err
-	}
-	return &PingFrame{}, nil
-}
-
 func (f *PingFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
 	b.WriteByte(0x1)
 	return nil

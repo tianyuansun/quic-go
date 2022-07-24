@@ -14,10 +14,9 @@ import (
 var _ = Describe("MAX_STREAMS frame", func() {
 	Context("parsing", func() {
 		It("accepts a frame for a bidirectional stream", func() {
-			data := []byte{0x12}
-			data = append(data, encodeVarInt(0xdecaf)...)
+			data := encodeVarInt(0xdecaf)
 			b := bytes.NewReader(data)
-			f, err := parseMaxStreamsFrame(b, protocol.VersionWhatever)
+			f, err := parseMaxStreamsFrame(b, 0x12, protocol.VersionWhatever)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(f.Type).To(Equal(protocol.StreamTypeBidi))
 			Expect(f.MaxStreamNum).To(BeEquivalentTo(0xdecaf))
@@ -25,10 +24,9 @@ var _ = Describe("MAX_STREAMS frame", func() {
 		})
 
 		It("accepts a frame for a bidirectional stream", func() {
-			data := []byte{0x13}
-			data = append(data, encodeVarInt(0xdecaf)...)
+			data := encodeVarInt(0xdecaf)
 			b := bytes.NewReader(data)
-			f, err := parseMaxStreamsFrame(b, protocol.VersionWhatever)
+			f, err := parseMaxStreamsFrame(b, 0x13, protocol.VersionWhatever)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(f.Type).To(Equal(protocol.StreamTypeUni))
 			Expect(f.MaxStreamNum).To(BeEquivalentTo(0xdecaf))
@@ -36,12 +34,11 @@ var _ = Describe("MAX_STREAMS frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := []byte{0x1d}
-			data = append(data, encodeVarInt(0xdeadbeefcafe13)...)
-			_, err := parseMaxStreamsFrame(bytes.NewReader(data), protocol.VersionWhatever)
+			data := encodeVarInt(0xdeadbeefcafe13)
+			_, err := parseMaxStreamsFrame(bytes.NewReader(data), 0x1d, protocol.VersionWhatever)
 			Expect(err).NotTo(HaveOccurred())
 			for i := range data {
-				_, err := parseMaxStreamsFrame(bytes.NewReader(data[0:i]), protocol.VersionWhatever)
+				_, err := parseMaxStreamsFrame(bytes.NewReader(data[0:i]), 0x1d, protocol.VersionWhatever)
 				Expect(err).To(HaveOccurred())
 			}
 		})
@@ -56,7 +53,7 @@ var _ = Describe("MAX_STREAMS frame", func() {
 				}
 				b := &bytes.Buffer{}
 				Expect(f.Write(b, protocol.VersionWhatever)).To(Succeed())
-				frame, err := parseMaxStreamsFrame(bytes.NewReader(b.Bytes()), protocol.VersionWhatever)
+				frame, err := parseMaxStreamsFrame(bytes.NewReader(b.Bytes()[1:]), uint64(b.Bytes()[0]), protocol.VersionWhatever)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(frame).To(Equal(f))
 			})
@@ -68,7 +65,7 @@ var _ = Describe("MAX_STREAMS frame", func() {
 				}
 				b := &bytes.Buffer{}
 				Expect(f.Write(b, protocol.VersionWhatever)).To(Succeed())
-				_, err := parseMaxStreamsFrame(bytes.NewReader(b.Bytes()), protocol.VersionWhatever)
+				_, err := parseMaxStreamsFrame(bytes.NewReader(b.Bytes()[1:]), uint64(b.Bytes()[0]), protocol.VersionWhatever)
 				Expect(err).To(MatchError(fmt.Sprintf("%d exceeds the maximum stream count", protocol.MaxStreamCount+1)))
 			})
 		}

@@ -14,8 +14,7 @@ import (
 var _ = Describe("RESET_STREAM frame", func() {
 	Context("when parsing", func() {
 		It("accepts sample frame", func() {
-			data := []byte{0x4}
-			data = append(data, encodeVarInt(0xdeadbeef)...)  // stream ID
+			data := encodeVarInt(0xdeadbeef)                  // stream ID
 			data = append(data, encodeVarInt(0x1337)...)      // error code
 			data = append(data, encodeVarInt(0x987654321)...) // byte offset
 			b := bytes.NewReader(data)
@@ -27,8 +26,7 @@ var _ = Describe("RESET_STREAM frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := []byte{0x4}
-			data = append(data, encodeVarInt(0xdeadbeef)...)  // stream ID
+			data := encodeVarInt(0xdeadbeef)                  // stream ID
 			data = append(data, encodeVarInt(0x1337)...)      // error code
 			data = append(data, encodeVarInt(0x987654321)...) // byte offset
 			_, err := parseResetStreamFrame(bytes.NewReader(data), protocol.Version1)

@@ -13,8 +13,7 @@ import (
 var _ = Describe("STREAM_DATA_BLOCKED frame", func() {
 	Context("parsing", func() {
 		It("accepts sample frame", func() {
-			data := []byte{0x15}
-			data = append(data, encodeVarInt(0xdeadbeef)...) // stream ID
+			data := encodeVarInt(0xdeadbeef)                 // stream ID
 			data = append(data, encodeVarInt(0xdecafbad)...) // offset
 			b := bytes.NewReader(data)
 			frame, err := parseStreamDataBlockedFrame(b, protocol.Version1)
@@ -25,8 +24,7 @@ var _ = Describe("STREAM_DATA_BLOCKED frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := []byte{0x15}
-			data = append(data, encodeVarInt(0xdeadbeef)...)
+			data := encodeVarInt(0xdeadbeef)
 			data = append(data, encodeVarInt(0xc0010ff)...)
 			_, err := parseStreamDataBlockedFrame(bytes.NewReader(data), protocol.Version1)
 			Expect(err).NotTo(HaveOccurred())

@@ -14,9 +14,8 @@ import (
 var _ = Describe("STOP_SENDING frame", func() {
 	Context("when parsing", func() {
 		It("parses a sample frame", func() {
-			data := []byte{0x5}
-			data = append(data, encodeVarInt(0xdecafbad)...) // stream ID
-			data = append(data, encodeVarInt(0x1337)...)     // error code
+			data := encodeVarInt(0xdecafbad)             // stream ID
+			data = append(data, encodeVarInt(0x1337)...) // error code
 			b := bytes.NewReader(data)
 			frame, err := parseStopSendingFrame(b, protocol.Version1)
 			Expect(err).ToNot(HaveOccurred())
@@ -26,9 +25,8 @@ var _ = Describe("STOP_SENDING frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := []byte{0x5}
-			data = append(data, encodeVarInt(0xdecafbad)...) // stream ID
-			data = append(data, encodeVarInt(0x123456)...)   // error code
+			data := encodeVarInt(0xdecafbad)               // stream ID
+			data = append(data, encodeVarInt(0x123456)...) // error code
 			_, err := parseStopSendingFrame(bytes.NewReader(data), protocol.Version1)
 			Expect(err).NotTo(HaveOccurred())
 			for i := range data {

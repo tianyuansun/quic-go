@@ -13,8 +13,7 @@ import (
 var _ = Describe("MAX_DATA frame", func() {
 	Context("when parsing", func() {
 		It("accepts sample frame", func() {
-			data := []byte{0x10}
-			data = append(data, encodeVarInt(0xdecafbad123456)...) // byte offset
+			data := encodeVarInt(0xdecafbad123456) // byte offset
 			b := bytes.NewReader(data)
 			frame, err := parseMaxDataFrame(b, protocol.Version1)
 			Expect(err).ToNot(HaveOccurred())
@@ -23,8 +22,7 @@ var _ = Describe("MAX_DATA frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := []byte{0x10}
-			data = append(data, encodeVarInt(0xdecafbad1234567)...) // byte offset
+			data := encodeVarInt(0xdecafbad1234567) // byte offset
 			_, err := parseMaxDataFrame(bytes.NewReader(data), protocol.Version1)
 			Expect(err).NotTo(HaveOccurred())
 			for i := range data {

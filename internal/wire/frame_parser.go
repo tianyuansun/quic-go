@@ -35,17 +35,12 @@ func NewFrameParser(supportsDatagrams, supportsAckFrequency bool, v protocol.Ver
 // It skips PADDING frames.
 func (p *frameParser) ParseNext(r *bytes.Reader, encLevel protocol.EncryptionLevel) (Frame, error) {
 	for r.Len() != 0 {
-		typLen := r.Len()
 		typ, err := quicvarint.Read(r)
 		if err != nil {
 			return nil, err
 		}
-		typLen -= r.Len()
 		if typ == 0x0 { // PADDING frame
 			continue
-		}
-		for i := 0; i < typLen; i++ {
-			r.UnreadByte()
 		}
 
 		f, err := p.parseFrame(r, typ, encLevel)
@@ -65,17 +60,17 @@ func (p *frameParser) parseFrame(r *bytes.Reader, typ uint64, encLevel protocol.
 	var frame Frame
 	var err error
 	if typ&0xf8 == 0x8 {
-		frame, err = parseStreamFrame(r, p.version)
+		frame, err = parseStreamFrame(r, typ, p.version)
 	} else {
 		switch typ {
 		case 0x1:
-			frame, err = parsePingFrame(r, p.version)
+			frame = &PingFrame{}
 		case 0x2, 0x3:
 			ackDelayExponent := p.ackDelayExponent
 			if encLevel != protocol.Encryption1RTT {
 				ackDelayExponent = protocol.DefaultAckDelayExponent
 			}
-			frame, err = parseAckFrame(r, ackDelayExponent, p.version)
+			frame, err = parseAckFrame(r, typ, ackDelayExponent, p.version)
 		case 0x4:
 			frame, err = parseResetStreamFrame(r, p.version)
 		case 0x5:
@@ -89,13 +84,13 @@ func (p *frameParser) parseFrame(r *bytes.Reader, typ uint64, encLevel protocol.
 		case 0x11:
 			frame, err = parseMaxStreamDataFrame(r, p.version)
 		case 0x12, 0x13:
-			frame, err = parseMaxStreamsFrame(r, p.version)
+			frame, err = parseMaxStreamsFrame(r, typ, p.version)
 		case 0x14:
 			frame, err = parseDataBlockedFrame(r, p.version)
 		case 0x15:
 			frame, err = parseStreamDataBlockedFrame(r, p.version)
 		case 0x16, 0x17:
-			frame, err = parseStreamsBlockedFrame(r, p.version)
+			frame, err = parseStreamsBlockedFrame(r, typ, p.version)
 		case 0x18:
 			frame, err = parseNewConnectionIDFrame(r, p.version)
 		case 0x19:
@@ -105,21 +100,21 @@ func (p *frameParser) parseFrame(r *bytes.Reader, typ uint64, encLevel protocol.
 		case 0x1b:
 			frame, err = parsePathResponseFrame(r, p.version)
 		case 0x1c, 0x1d:
-			frame, err = parseConnectionCloseFrame(r, p.version)
+			frame, err = parseConnectionCloseFrame(r, typ, p.version)
 		case 0x1e:
-			frame, err = parseHandshakeDoneFrame(r, p.version)
+			frame = &HandshakeDoneFrame{}
 		case 0x30, 0x31:
 			if !p.supportsDatagrams {
 				err = errUnknownFrame
 				break
 			}
-			frame, err = parseDatagramFrame(r, p.version)
+			frame, err = parseDatagramFrame(r, typ, p.version)
 		case 0xac:
 			if !p.supportAckFrequency {
 				err = errUnknownFrame
 				break
 			}
-			frame, err = parseImmediateAckFrame(r, p.version)
+			frame = &ImmediateAckFrame{}
 		case 0xaf:
 			if !p.supportAckFrequency {
 				err = errUnknownFrame

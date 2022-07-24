@@ -9,14 +9,6 @@ import (
 // A HandshakeDoneFrame is a HANDSHAKE_DONE frame
 type HandshakeDoneFrame struct{}
 
-// ParseHandshakeDoneFrame parses a HandshakeDone frame
-func parseHandshakeDoneFrame(r *bytes.Reader, _ protocol.VersionNumber) (*HandshakeDoneFrame, error) {
-	if _, err := r.ReadByte(); err != nil {
-		return nil, err
-	}
-	return &HandshakeDoneFrame{}, nil
-}
-
 func (f *HandshakeDoneFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
 	b.WriteByte(0x1e)
 	return nil

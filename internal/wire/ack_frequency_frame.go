@@ -18,10 +18,6 @@ type AckFrequencyFrame struct {
 }
 
 func parseAckFrequencyFrame(r *bytes.Reader, _ protocol.VersionNumber) (*AckFrequencyFrame, error) {
-	if _, err := quicvarint.Read(r); err != nil {
-		return nil, err
-	}
-
 	seq, err := quicvarint.Read(r)
 	if err != nil {
 		return nil, err

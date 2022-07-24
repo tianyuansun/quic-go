@@ -14,14 +14,9 @@ type DatagramFrame struct {
 	Data           []byte
 }
 
-func parseDatagramFrame(r *bytes.Reader, _ protocol.VersionNumber) (*DatagramFrame, error) {
-	typeByte, err := r.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
+func parseDatagramFrame(r *bytes.Reader, typ uint64, _ protocol.VersionNumber) (*DatagramFrame, error) {
 	f := &DatagramFrame{}
-	f.DataLenPresent = typeByte&0x1 > 0
+	f.DataLenPresent = typ&0x1 > 0
 
 	var length uint64
 	if f.DataLenPresent {
@@ -58,7 +53,7 @@ func (f *DatagramFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
 }
 
 // MaxDataLen returns the maximum data length
-func (f *DatagramFrame) MaxDataLen(maxSize protocol.ByteCount, version protocol.VersionNumber) protocol.ByteCount {
+func (f *DatagramFrame) MaxDataLen(maxSize protocol.ByteCount, _ protocol.VersionNumber) protocol.ByteCount {
 	headerLen := protocol.ByteCount(1)
 	if f.DataLenPresent {
 		// pretend that the data size will be 1 bytes

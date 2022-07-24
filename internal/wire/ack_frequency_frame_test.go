@@ -24,10 +24,9 @@ var _ = Describe("ACK_FREQUENCY frame", func() {
 
 	Context("when parsing", func() {
 		It("parses", func() {
-			data := frameType
-			data = append(data, encodeVarInt(0xdeadbeef)...) // sequence number
-			data = append(data, encodeVarInt(0xcafe)...)     // threshold
-			data = append(data, encodeVarInt(1337)...)       // update max ack delay
+			data := encodeVarInt(0xdeadbeef)             // sequence number
+			data = append(data, encodeVarInt(0xcafe)...) // threshold
+			data = append(data, encodeVarInt(1337)...)   // update max ack delay
 			data = append(data, 3)
 			b := bytes.NewReader(data)
 			frame, err := parseAckFrequencyFrame(b, protocol.Version1)
@@ -40,10 +39,9 @@ var _ = Describe("ACK_FREQUENCY frame", func() {
 		})
 
 		It("errors when the reserved bits are set", func() {
-			data := frameType
-			data = append(data, encodeVarInt(0xdeadbeef)...) // sequence number
-			data = append(data, encodeVarInt(0)...)          // threshold
-			data = append(data, encodeVarInt(1337)...)       // update max ack delay
+			data := encodeVarInt(0xdeadbeef)           // sequence number
+			data = append(data, encodeVarInt(0)...)    // threshold
+			data = append(data, encodeVarInt(1337)...) // update max ack delay
 			data = append(data, 0b100)
 			b := bytes.NewReader(data)
 			_, err := parseAckFrequencyFrame(b, protocol.Version1)
@@ -51,10 +49,9 @@ var _ = Describe("ACK_FREQUENCY frame", func() {
 		})
 
 		It("errors on EOFs", func() {
-			data := frameType
-			data = append(data, encodeVarInt(0xdeadbeef)...) // sequence number
-			data = append(data, encodeVarInt(0xcafe)...)     // threshold
-			data = append(data, encodeVarInt(1337)...)       // update max ack delay
+			data := encodeVarInt(0xdeadbeef)             // sequence number
+			data = append(data, encodeVarInt(0xcafe)...) // threshold
+			data = append(data, encodeVarInt(1337)...)   // update max ack delay
 			data = append(data, 0)
 			_, err := parseAckFrequencyFrame(bytes.NewReader(data), protocol.Version1)
 			Expect(err).NotTo(HaveOccurred())
@@ -82,7 +79,7 @@ var _ = Describe("ACK_FREQUENCY frame", func() {
 			expected = append(expected, 1)
 			Expect(buf.Bytes()).To(Equal(expected))
 			Expect(frame.Length(protocol.Version1)).To(BeEquivalentTo(buf.Len()))
-			f, err := parseAckFrequencyFrame(bytes.NewReader(buf.Bytes()), protocol.Version1)
+			f, err := parseAckFrequencyFrame(bytes.NewReader(buf.Bytes()[2:]), protocol.Version1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(f).To(Equal(frame))
 			Expect(f.Length(protocol.Version1)).To(Equal(protocol.ByteCount(buf.Len())))
@@ -104,7 +101,7 @@ var _ = Describe("ACK_FREQUENCY frame", func() {
 			expected = append(expected, 2)
 			Expect(buf.Bytes()).To(Equal(expected))
 			Expect(frame.Length(protocol.Version1)).To(BeEquivalentTo(buf.Len()))
-			f, err := parseAckFrequencyFrame(bytes.NewReader(buf.Bytes()), protocol.Version1)
+			f, err := parseAckFrequencyFrame(bytes.NewReader(buf.Bytes()[2:]), protocol.Version1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(f).To(Equal(frame))
 			Expect(f.Length(protocol.Version1)).To(Equal(protocol.ByteCount(buf.Len())))

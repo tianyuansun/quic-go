@@ -19,20 +19,6 @@ var _ = Describe("IMMEDIATE_ACK frame", func() {
 		frameType = buf.Bytes()
 	})
 
-	Context("when parsing", func() {
-		It("accepts sample frame", func() {
-			b := bytes.NewReader(frameType)
-			_, err := parseImmediateAckFrame(b, protocol.VersionWhatever)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(b.Len()).To(BeZero())
-		})
-
-		It("errors on EOFs", func() {
-			_, err := parseImmediateAckFrame(bytes.NewReader(nil), protocol.VersionWhatever)
-			Expect(err).To(HaveOccurred())
-		})
-	})
-
 	Context("when writing", func() {
 		It("writes a sample frame", func() {
 			b := &bytes.Buffer{}

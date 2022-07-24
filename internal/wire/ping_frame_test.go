@@ -9,20 +9,6 @@ import (
 )
 
 var _ = Describe("PingFrame", func() {
-	Context("when parsing", func() {
-		It("accepts sample frame", func() {
-			b := bytes.NewReader([]byte{0x1})
-			_, err := parsePingFrame(b, protocol.VersionWhatever)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(b.Len()).To(BeZero())
-		})
-
-		It("errors on EOFs", func() {
-			_, err := parsePingFrame(bytes.NewReader(nil), protocol.VersionWhatever)
-			Expect(err).To(HaveOccurred())
-		})
-	})
-
 	Context("when writing", func() {
 		It("writes a sample frame", func() {
 			b := &bytes.Buffer{}
