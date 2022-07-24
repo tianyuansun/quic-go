@@ -36,30 +36,29 @@ func newReceivedPacketHandler(
 	}
 }
 
-func (h *receivedPacketHandler) ReceivedPacket(
-	pn protocol.PacketNumber,
+func (h *receivedPacketHandler) ReceivedPacket(pn protocol.PacketNumber,
 	ecn protocol.ECN,
 	encLevel protocol.EncryptionLevel,
 	rcvTime time.Time,
-	shouldInstigateAck bool,
+	isAckEliciting bool,
 ) error {
 	h.sentPackets.ReceivedPacket(encLevel)
 	switch encLevel {
 	case protocol.EncryptionInitial:
-		h.initialPackets.ReceivedPacket(pn, ecn, rcvTime, shouldInstigateAck)
+		h.initialPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
 	case protocol.EncryptionHandshake:
-		h.handshakePackets.ReceivedPacket(pn, ecn, rcvTime, shouldInstigateAck)
+		h.handshakePackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
 	case protocol.Encryption0RTT:
 		if h.lowest1RTTPacket != protocol.InvalidPacketNumber && pn > h.lowest1RTTPacket {
 			return fmt.Errorf("received packet number %d on a 0-RTT packet after receiving %d on a 1-RTT packet", pn, h.lowest1RTTPacket)
 		}
-		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, shouldInstigateAck)
+		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
 	case protocol.Encryption1RTT:
 		if h.lowest1RTTPacket == protocol.InvalidPacketNumber || pn < h.lowest1RTTPacket {
 			h.lowest1RTTPacket = pn
 		}
 		h.appDataPackets.IgnoreBelow(h.sentPackets.GetLowestPacketNotConfirmedAcked())
-		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, shouldInstigateAck)
+		h.appDataPackets.ReceivedPacket(pn, ecn, rcvTime, isAckEliciting)
 	default:
 		panic(fmt.Sprintf("received packet with unknown encryption level: %s", encLevel))
 	}
@@ -91,6 +90,10 @@ func (h *receivedPacketHandler) GetAlarmTimeout() time.Time {
 	}
 	oneRTTAlarm := h.appDataPackets.GetAlarmTimeout()
 	return utils.MinNonZeroTime(utils.MinNonZeroTime(initialAlarm, handshakeAlarm), oneRTTAlarm)
+}
+
+func (h *receivedPacketHandler) HandleAckFrequencyFrame(af *wire.AckFrequencyFrame) {
+	h.appDataPackets.HandleAckFrequencyFrame(af)
 }
 
 func (h *receivedPacketHandler) GetAckFrame(encLevel protocol.EncryptionLevel, onlyIfQueued bool) *wire.AckFrame {

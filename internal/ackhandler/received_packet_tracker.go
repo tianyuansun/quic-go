@@ -9,7 +9,7 @@ import (
 )
 
 // number of ack-eliciting packets received before sending an ack.
-const packetsBeforeAck = 2
+const defaultPacketsBeforeAck = 2
 
 type receivedPacketTracker struct {
 	largestObserved             protocol.PacketNumber
@@ -19,13 +19,16 @@ type receivedPacketTracker struct {
 
 	packetHistory *receivedPacketHistory
 
-	maxAckDelay time.Duration
-	rttStats    *utils.RTTStats
+	highestAckFrequencySeq int64
+	packetsBeforeAck       uint64
+	ignoreOrder            bool // when set, reordered packets don't cause an immediate ACK to be sent
+	maxAckDelay            time.Duration
+	rttStats               *utils.RTTStats
 
 	hasNewAck bool // true as soon as we received an ack-eliciting new packet
 	ackQueued bool // true once we received more than 2 (or later in the connection 10) ack-eliciting packets
 
-	ackElicitingPacketsReceivedSinceLastAck int
+	ackElicitingPacketsReceivedSinceLastAck uint64
 	ackAlarm                                time.Time
 	lastAck                                 *wire.AckFrame
 
@@ -40,30 +43,32 @@ func newReceivedPacketTracker(
 	version protocol.VersionNumber,
 ) *receivedPacketTracker {
 	return &receivedPacketTracker{
-		packetHistory: newReceivedPacketHistory(),
-		maxAckDelay:   protocol.MaxAckDelay,
-		rttStats:      rttStats,
-		logger:        logger,
-		version:       version,
+		packetHistory:          newReceivedPacketHistory(),
+		highestAckFrequencySeq: -1,
+		maxAckDelay:            protocol.MaxAckDelay,
+		packetsBeforeAck:       defaultPacketsBeforeAck,
+		rttStats:               rttStats,
+		logger:                 logger,
+		version:                version,
 	}
 }
 
-func (h *receivedPacketTracker) ReceivedPacket(packetNumber protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, shouldInstigateAck bool) {
-	if packetNumber < h.ignoreBelow {
+func (h *receivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, isAckEliciting bool) {
+	if pn < h.ignoreBelow {
 		return
 	}
 
-	isMissing := h.isMissing(packetNumber)
-	if packetNumber >= h.largestObserved {
-		h.largestObserved = packetNumber
+	isMissing := h.isMissing(pn)
+	if pn >= h.largestObserved {
+		h.largestObserved = pn
 		h.largestObservedReceivedTime = rcvTime
 	}
 
-	if isNew := h.packetHistory.ReceivedPacket(packetNumber); isNew && shouldInstigateAck {
+	if isNew := h.packetHistory.ReceivedPacket(pn); isNew && isAckEliciting {
 		h.hasNewAck = true
 	}
-	if shouldInstigateAck {
-		h.maybeQueueAck(packetNumber, rcvTime, isMissing)
+	if isAckEliciting {
+		h.maybeQueueAck(pn, rcvTime, isMissing)
 	}
 	switch ecn {
 	case protocol.ECNNon:
@@ -125,7 +130,7 @@ func (h *receivedPacketTracker) maybeQueueAck(pn protocol.PacketNumber, rcvTime 
 	// Send an ACK if this packet was reported missing in an ACK sent before.
 	// Ack decimation with reordering relies on the timer to send an ACK, but if
 	// missing packets we reported in the previous ack, send an ACK immediately.
-	if wasMissing {
+	if !h.ignoreOrder && wasMissing {
 		if h.logger.Debug() {
 			h.logger.Debugf("\tQueueing ACK because packet %d was missing before.", pn)
 		}
@@ -133,9 +138,9 @@ func (h *receivedPacketTracker) maybeQueueAck(pn protocol.PacketNumber, rcvTime 
 	}
 
 	// send an ACK every 2 ack-eliciting packets
-	if h.ackElicitingPacketsReceivedSinceLastAck >= packetsBeforeAck {
+	if h.ackElicitingPacketsReceivedSinceLastAck >= h.packetsBeforeAck {
 		if h.logger.Debug() {
-			h.logger.Debugf("\tQueueing ACK because packet %d packets were received after the last ACK (using initial threshold: %d).", h.ackElicitingPacketsReceivedSinceLastAck, packetsBeforeAck)
+			h.logger.Debugf("\tQueueing ACK because packet %d packets were received after the last ACK (threshold: %d).", h.ackElicitingPacketsReceivedSinceLastAck, h.packetsBeforeAck)
 		}
 		h.ackQueued = true
 	} else if h.ackAlarm.IsZero() {
@@ -146,7 +151,7 @@ func (h *receivedPacketTracker) maybeQueueAck(pn protocol.PacketNumber, rcvTime 
 	}
 
 	// Queue an ACK if there are new missing packets to report.
-	if h.hasNewMissingPackets() {
+	if !h.ignoreOrder && h.hasNewMissingPackets() {
 		h.logger.Debugf("\tQueuing ACK because there's a new missing packet to report.")
 		h.ackQueued = true
 	}
@@ -187,6 +192,32 @@ func (h *receivedPacketTracker) GetAckFrame(onlyIfQueued bool) *wire.AckFrame {
 	h.hasNewAck = false
 	h.ackElicitingPacketsReceivedSinceLastAck = 0
 	return ack
+}
+
+func (h *receivedPacketTracker) HandleAckFrequencyFrame(af *wire.AckFrequencyFrame) {
+	seq := int64(af.SequenceNumber)
+	if seq < h.highestAckFrequencySeq { // reordered frame. Ignore.
+		return
+	}
+	h.highestAckFrequencySeq = seq
+
+	if h.logger.Debug() {
+		h.logger.Debugf("Changing ACK frequency settings (seq: %d). Threshold: %d (was %d), MaxAckDelay: %s (was %s), IgnoreOrder: %d (was %d)",
+			seq, af.Threshold, h.packetsBeforeAck, af.UpdateMaxAckDelay, h.maxAckDelay, af.IgnoreOrder, h.ignoreOrder)
+	}
+	if af.UpdateMaxAckDelay != h.maxAckDelay && !h.ackAlarm.IsZero() {
+		// If the ACK_FREQUENCY frame reduced the maxAckDelay, this might cause us to generate a new ACK immediately.
+		// We don't need to do this here, since the connection calls ReceivedPacket _after_ handling all the frames.
+		h.ackAlarm.Add(af.UpdateMaxAckDelay - h.maxAckDelay)
+	}
+	// If we ignored reordered packet before, but don't do that any more going forward, queue an ACK just in case.
+	// We might have received out-of-order packets that are not yet acknowledged.
+	if !af.IgnoreOrder && h.ignoreOrder {
+		h.ackQueued = true
+	}
+	h.maxAckDelay = af.UpdateMaxAckDelay
+	h.packetsBeforeAck = af.Threshold
+	h.ignoreOrder = af.IgnoreOrder
 }
 
 func (h *receivedPacketTracker) GetAlarmTimeout() time.Time { return h.ackAlarm }

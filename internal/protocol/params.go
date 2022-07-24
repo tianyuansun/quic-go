@@ -166,12 +166,16 @@ const PacketsPerConnectionID = 10000
 // AckDelayExponent is the ack delay exponent used when sending ACKs.
 const AckDelayExponent = 3
 
-// Estimated timer granularity.
+// TimerGranularity is the estimated timer granularity.
 // The loss detection timer will not be set to a value smaller than granularity.
 const TimerGranularity = time.Millisecond
 
 // MaxAckDelay is the maximum time by which we delay sending ACKs.
 const MaxAckDelay = 25 * time.Millisecond
+
+// MinAckDelay is the min_ack_delay used by the ACK Frequency extension.
+// https://datatracker.ietf.org/doc/html/draft-ietf-quic-ack-frequency-02
+const MinAckDelay = TimerGranularity
 
 // MaxAckDelayInclGranularity is the max_ack_delay including the timer granularity.
 // This is the value that should be advertised to the peer.

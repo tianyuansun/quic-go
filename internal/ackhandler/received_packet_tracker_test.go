@@ -344,5 +344,67 @@ var _ = Describe("Received Packet Tracker", func() {
 				})
 			})
 		})
+
+		Context("ACK_FREQUENCY frame handling", func() {
+			var nextPN protocol.PacketNumber
+
+			BeforeEach(func() {
+				nextPN = 0
+				// receive and acknowledge 10 packets
+				for i := 1; i <= 10; i++ {
+					tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Time{}, true)
+					nextPN++
+				}
+				Expect(tracker.GetAckFrame(true)).ToNot(BeNil())
+				Expect(tracker.ackQueued).To(BeFalse())
+			})
+
+			It("increases the threshold", func() {
+				const threshold = 20
+				tracker.HandleAckFrequencyFrame(&wire.AckFrequencyFrame{
+					Threshold:         threshold,
+					UpdateMaxAckDelay: time.Hour,
+				})
+				for i := 0; i < threshold-1; i++ {
+					tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Now(), true)
+					nextPN++
+					// sprinkle in a non-ack-eliciting packet every now and then
+					if i%4 == 0 {
+						tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Now(), false)
+						nextPN++
+					}
+					Expect(tracker.GetAckFrame(true)).To(BeNil())
+				}
+				tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Now(), true)
+				Expect(tracker.GetAckFrame(true)).ToNot(BeNil())
+			})
+
+			It("doesn't generate ACKs for reordered packets", func() {
+				tracker.HandleAckFrequencyFrame(&wire.AckFrequencyFrame{
+					Threshold:         999,
+					IgnoreOrder:       true,
+					UpdateMaxAckDelay: time.Hour,
+				})
+
+				nextPN++
+				tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Now(), true)
+				Expect(tracker.GetAckFrame(true)).To(BeNil())
+				nextPN += 5
+				tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Now(), true)
+				Expect(tracker.GetAckFrame(true)).To(BeNil())
+
+				tracker.HandleAckFrequencyFrame(&wire.AckFrequencyFrame{Threshold: 999, IgnoreOrder: false})
+				nextPN++
+				tracker.ReceivedPacket(nextPN, protocol.ECNNon, time.Now(), true)
+				Expect(tracker.GetAckFrame(true)).ToNot(BeNil())
+			})
+
+			It("sets the max ack delay", func() {
+				now := time.Now()
+				tracker.HandleAckFrequencyFrame(&wire.AckFrequencyFrame{Threshold: 10, UpdateMaxAckDelay: time.Hour})
+				tracker.ReceivedPacket(nextPN, protocol.ECNNon, now, true)
+				Expect(tracker.GetAlarmTimeout()).To(Equal(now.Add(time.Hour)))
+			})
+		})
 	})
 })

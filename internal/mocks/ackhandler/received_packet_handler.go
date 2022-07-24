@@ -76,6 +76,18 @@ func (mr *MockReceivedPacketHandlerMockRecorder) GetAlarmTimeout() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlarmTimeout", reflect.TypeOf((*MockReceivedPacketHandler)(nil).GetAlarmTimeout))
 }
 
+// HandleAckFrequencyFrame mocks base method.
+func (m *MockReceivedPacketHandler) HandleAckFrequencyFrame(arg0 *wire.AckFrequencyFrame) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "HandleAckFrequencyFrame", arg0)
+}
+
+// HandleAckFrequencyFrame indicates an expected call of HandleAckFrequencyFrame.
+func (mr *MockReceivedPacketHandlerMockRecorder) HandleAckFrequencyFrame(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAckFrequencyFrame", reflect.TypeOf((*MockReceivedPacketHandler)(nil).HandleAckFrequencyFrame), arg0)
+}
+
 // IsPotentiallyDuplicate mocks base method.
 func (m *MockReceivedPacketHandler) IsPotentiallyDuplicate(arg0 protocol.PacketNumber, arg1 protocol.EncryptionLevel) bool {
 	m.ctrl.T.Helper()

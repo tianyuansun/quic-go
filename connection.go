@@ -1246,6 +1246,8 @@ func (s *connection) handleFrame(f wire.Frame, encLevel protocol.EncryptionLevel
 		err = s.handleHandshakeDoneFrame()
 	case *wire.DatagramFrame:
 		err = s.handleDatagramFrame(frame)
+	case *wire.AckFrequencyFrame:
+		err = s.handleAckFrequencyFrame(frame)
 	default:
 		err = fmt.Errorf("unexpected frame type: %s", reflect.ValueOf(&frame).Elem().Type().Name())
 	}
@@ -1414,6 +1416,18 @@ func (s *connection) handleDatagramFrame(f *wire.DatagramFrame) error {
 		}
 	}
 	s.datagramQueue.HandleDatagramFrame(f)
+	return nil
+}
+
+func (s *connection) handleAckFrequencyFrame(f *wire.AckFrequencyFrame) error {
+	if f.UpdateMaxAckDelay < protocol.MinAckDelay {
+		return &qerr.TransportError{
+			ErrorCode: qerr.ProtocolViolation,
+			ErrorMessage: fmt.Sprintf("ACK_FREQUENCY frame with too short Request Max Ack Delay received: %s (min: %s)",
+				f.UpdateMaxAckDelay, protocol.MinAckDelay),
+		}
+	}
+	s.receivedPacketHandler.HandleAckFrequencyFrame(f)
 	return nil
 }
 

@@ -60,7 +60,8 @@ type sentPacketTracker interface {
 // ReceivedPacketHandler handles ACKs needed to send for incoming packets
 type ReceivedPacketHandler interface {
 	IsPotentiallyDuplicate(protocol.PacketNumber, protocol.EncryptionLevel) bool
-	ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, encLevel protocol.EncryptionLevel, rcvTime time.Time, shouldInstigateAck bool) error
+	ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, encLevel protocol.EncryptionLevel, rcvTime time.Time, isAckEliciting bool) error
+	HandleAckFrequencyFrame(frame *wire.AckFrequencyFrame)
 	DropPackets(protocol.EncryptionLevel)
 
 	GetAlarmTimeout() time.Time
