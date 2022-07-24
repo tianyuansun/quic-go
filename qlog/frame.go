@@ -59,6 +59,10 @@ func (f frame) MarshalJSONObject(enc *gojay.Encoder) {
 		marshalHandshakeDoneFrame(enc, frame)
 	case *logging.DatagramFrame:
 		marshalDatagramFrame(enc, frame)
+	case *logging.AckFrequencyFrame:
+		marshalAckFrequencyFrame(enc, frame)
+	case *logging.ImmediateAckFrame:
+		marshalImmediateAckFrame(enc, frame)
 	default:
 		panic("unknown frame type")
 	}
@@ -224,4 +228,17 @@ func marshalHandshakeDoneFrame(enc *gojay.Encoder, _ *logging.HandshakeDoneFrame
 func marshalDatagramFrame(enc *gojay.Encoder, f *logging.DatagramFrame) {
 	enc.StringKey("frame_type", "datagram")
 	enc.Int64Key("length", int64(f.Length))
+}
+
+func marshalAckFrequencyFrame(enc *gojay.Encoder, f *logging.AckFrequencyFrame) {
+	enc.StringKey("frame_type", "ack_frequency")
+	enc.Uint64Key("sequence_number", f.SequenceNumber)
+	enc.Uint64Key("ack_eliciting_threshold", f.Threshold)
+	enc.Float64Key("request_max_ack_delay", milliseconds(f.UpdateMaxAckDelay))
+	enc.BoolKey("ignore_ce", f.IgnoreCE)
+	enc.BoolKey("ignore_order", f.IgnoreOrder)
+}
+
+func marshalImmediateAckFrame(enc *gojay.Encoder, _ *logging.ImmediateAckFrame) {
+	enc.StringKey("frame_type", "immediate_ack")
 }

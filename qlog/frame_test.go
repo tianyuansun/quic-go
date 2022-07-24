@@ -374,4 +374,33 @@ var _ = Describe("Frames", func() {
 			},
 		)
 	})
+
+	It("marshals ACK_FREQUENCY frames", func() {
+		check(
+			&logging.AckFrequencyFrame{
+				SequenceNumber:    10,
+				Threshold:         123,
+				UpdateMaxAckDelay: 1337 * time.Microsecond,
+				IgnoreOrder:       false,
+				IgnoreCE:          true,
+			},
+			map[string]interface{}{
+				"frame_type":              "ack_frequency",
+				"sequence_number":         10,
+				"ack_eliciting_threshold": 123,
+				"request_max_ack_delay":   1.337,
+				"ignore_ce":               true,
+				"ignore_order":            false,
+			},
+		)
+	})
+
+	It("marshals IMMEDIATE_ACK frames", func() {
+		check(
+			&logging.ImmediateAckFrame{},
+			map[string]interface{}{
+				"frame_type": "immediate_ack",
+			},
+		)
+	})
 })

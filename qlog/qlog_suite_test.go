@@ -37,6 +37,8 @@ func checkEncoding(data []byte, expected map[string]interface{}) {
 			ExpectWithOffset(1, m).To(HaveKeyWithValue(key, v))
 		case int:
 			ExpectWithOffset(1, m).To(HaveKeyWithValue(key, float64(v)))
+		case float64:
+			ExpectWithOffset(1, m).To(HaveKeyWithValue(key, v))
 		case [][]float64: // used in the ACK frame
 			ExpectWithOffset(1, m).To(HaveKey(key))
 			for i, l := range v {
