@@ -324,6 +324,23 @@ var _ = Describe("Frame parsing", func() {
 		Expect(err).To(MatchError("FRAME_ENCODING_ERROR (frame type: 0xaf): unknown frame type"))
 	})
 
+	It("unpacks IMMEDIATE_ACK frames", func() {
+		f := &ImmediateAckFrame{}
+		Expect(f.Write(buf, protocol.Version1)).To(Succeed())
+		frame, err := parser.ParseNext(bytes.NewReader(buf.Bytes()), protocol.Encryption1RTT)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(frame).To(Equal(f))
+	})
+
+	It("errors when IMMEDIATE_ACK frames are not supported", func() {
+		parser = NewFrameParser(true, false, protocol.Version1)
+		f := &ImmediateAckFrame{}
+		buf := &bytes.Buffer{}
+		Expect(f.Write(buf, protocol.Version1)).To(Succeed())
+		_, err := parser.ParseNext(bytes.NewReader(buf.Bytes()), protocol.Encryption1RTT)
+		Expect(err).To(MatchError("FRAME_ENCODING_ERROR (frame type: 0xac): unknown frame type"))
+	})
+
 	It("errors on invalid type", func() {
 		_, err := parser.ParseNext(bytes.NewReader([]byte{42}), protocol.Encryption1RTT)
 		Expect(err).To(MatchError(&qerr.TransportError{

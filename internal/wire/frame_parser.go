@@ -114,6 +114,12 @@ func (p *frameParser) parseFrame(r *bytes.Reader, typ uint64, encLevel protocol.
 				break
 			}
 			frame, err = parseDatagramFrame(r, p.version)
+		case 0xac:
+			if !p.supportAckFrequency {
+				err = errUnknownFrame
+				break
+			}
+			frame, err = parseImmediateAckFrame(r, p.version)
 		case 0xaf:
 			if !p.supportAckFrequency {
 				err = errUnknownFrame
