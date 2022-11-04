@@ -10,6 +10,8 @@ import (
 	"github.com/quic-go/quic-go/internal/qerr"
 )
 
+const reliableResetStreamFrameType = 0x72
+
 type frameParser struct {
 	r bytes.Reader // cached bytes.Reader, so we don't have to repeatedly allocate them
 
