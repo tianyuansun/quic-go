@@ -8,6 +8,7 @@ import (
 
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
+	"github.com/quic-go/quic-go/quicvarint"
 )
 
 const reliableResetStreamFrameType = 0x72
@@ -43,11 +44,16 @@ func (p *frameParser) ParseNext(data []byte, encLevel protocol.EncryptionLevel, 
 
 func (p *frameParser) parseNext(r *bytes.Reader, encLevel protocol.EncryptionLevel, v protocol.VersionNumber) (Frame, error) {
 	for r.Len() != 0 {
-		typeByte, _ := p.r.ReadByte()
+		typeByte, err := quicvarint.Read(r)
+		if err != nil {
+			return nil, err
+		}
 		if typeByte == 0x0 { // PADDING frame
 			continue
 		}
-		r.UnreadByte()
+		for i := protocol.ByteCount(0); i < quicvarint.Len(typeByte); i++ {
+			r.UnreadByte()
+		}
 
 		f, err := p.parseFrame(r, typeByte, encLevel, v)
 		if err != nil {
@@ -62,7 +68,7 @@ func (p *frameParser) parseNext(r *bytes.Reader, encLevel protocol.EncryptionLev
 	return nil, nil
 }
 
-func (p *frameParser) parseFrame(r *bytes.Reader, typeByte byte, encLevel protocol.EncryptionLevel, v protocol.VersionNumber) (Frame, error) {
+func (p *frameParser) parseFrame(r *bytes.Reader, typeByte uint64, encLevel protocol.EncryptionLevel, v protocol.VersionNumber) (Frame, error) {
 	var frame Frame
 	var err error
 	if typeByte&0xf8 == 0x8 {
@@ -77,7 +83,7 @@ func (p *frameParser) parseFrame(r *bytes.Reader, typeByte byte, encLevel protoc
 				ackDelayExponent = protocol.DefaultAckDelayExponent
 			}
 			frame, err = parseAckFrame(r, ackDelayExponent, v)
-		case 0x4:
+		case 0x4, reliableResetStreamFrameType: // TODO: only parse RELIABLE_RESET_STREAM frames when negotiated
 			frame, err = parseResetStreamFrame(r, v)
 		case 0x5:
 			frame, err = parseStopSendingFrame(r, v)

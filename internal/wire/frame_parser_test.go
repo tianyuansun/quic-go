@@ -328,10 +328,10 @@ var _ = Describe("Frame parsing", func() {
 	})
 
 	It("errors on invalid type", func() {
-		_, _, err := parser.ParseNext([]byte{0x42}, protocol.Encryption1RTT, protocol.Version1)
+		_, _, err := parser.ParseNext([]byte{0x20}, protocol.Encryption1RTT, protocol.Version1)
 		Expect(err).To(MatchError(&qerr.TransportError{
 			ErrorCode:    qerr.FrameEncodingError,
-			FrameType:    0x42,
+			FrameType:    0x20,
 			ErrorMessage: "unknown frame type",
 		}))
 	})
