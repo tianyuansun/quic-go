@@ -687,6 +687,123 @@ var _ = Describe("Receive Stream", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
+
+		Context("receiving RELIABLE_RESET_STREAM frames", func() {
+			var rst *wire.ResetStreamFrame
+
+			BeforeEach(func() {
+				rst = &wire.ResetStreamFrame{
+					StreamID:  streamID,
+					FinalSize: 42,
+					ErrorCode: 1234,
+				}
+			})
+
+			It("doesn't read the error, until it can read the reliable size", func() {
+				done := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					b := make([]byte, 3)
+					n, err := strWithTimeout.Read(b)
+					done <- struct{}{}
+					Expect(n).To(Equal(3))
+					Expect(b).To(Equal([]byte("foo")))
+					Expect(err).ToNot(HaveOccurred())
+					n, err = strWithTimeout.Read(b)
+					Expect(n).To(Equal(3))
+					Expect(b).To(Equal([]byte("bar")))
+					Expect(err).To(MatchError(&StreamError{
+						StreamID:  streamID,
+						ErrorCode: 1234,
+					}))
+					close(done)
+				}()
+				rst.ReliableSize = 6
+				gomock.InOrder(
+					mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(42), true),
+					mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(6), false),
+					mockFC.EXPECT().AddBytesRead(protocol.ByteCount(3)).Times(2),
+					mockFC.EXPECT().Abandon(),
+				)
+				Expect(str.handleResetStreamFrame(rst)).To(Succeed())
+				Consistently(done).ShouldNot(BeClosed())
+
+				Expect(str.handleStreamFrame(&wire.StreamFrame{
+					StreamID: streamID,
+					Data:     []byte("foobar"),
+				})).To(Succeed())
+				mockSender.EXPECT().onStreamCompleted(streamID)
+				Eventually(done).Should(Receive())
+				Eventually(done).Should(BeClosed())
+			})
+
+			It("reads the error after having read the data", func() {
+				gomock.InOrder(
+					mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(6), false),
+					mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(6), true),
+					mockFC.EXPECT().AddBytesRead(protocol.ByteCount(6)),
+					mockFC.EXPECT().Abandon(),
+				)
+				Expect(str.handleStreamFrame(&wire.StreamFrame{
+					StreamID: streamID,
+					Data:     []byte("foobar"),
+				})).To(Succeed())
+				rst.FinalSize = 6
+				rst.ReliableSize = 6
+				Expect(str.handleResetStreamFrame(rst)).To(Succeed())
+
+				done := make(chan struct{}, 1)
+				mockSender.EXPECT().onStreamCompleted(streamID)
+				go func() {
+					defer GinkgoRecover()
+					b := make([]byte, 6)
+					n, err := strWithTimeout.Read(b)
+					done <- struct{}{}
+					Expect(n).To(Equal(6))
+					Expect(b).To(Equal([]byte("foobar")))
+					Expect(err).To(MatchError(&StreamError{
+						StreamID:  streamID,
+						ErrorCode: 1234,
+					}))
+					close(done)
+				}()
+
+				Eventually(done).Should(Receive())
+				Eventually(done).Should(BeClosed())
+			})
+
+			It("immediately reads the error, if we read past the reliable size", func() {
+				mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(6), false)
+				str.handleStreamFrame(&wire.StreamFrame{
+					StreamID: streamID,
+					Data:     []byte("foobar"),
+				})
+				mockFC.EXPECT().AddBytesRead(protocol.ByteCount(3))
+				n, err := strWithTimeout.Read(make([]byte, 3))
+				Expect(n).To(Equal(3))
+				Expect(err).ToNot(HaveOccurred())
+
+				mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(42), true)
+				mockFC.EXPECT().Abandon()
+				mockSender.EXPECT().onStreamCompleted(streamID)
+				rst.ReliableSize = 3
+				Expect(str.handleResetStreamFrame(rst)).To(Succeed())
+				n, err = strWithTimeout.Read(make([]byte, 3))
+				Expect(n).To(BeZero())
+				Expect(err).To(MatchError(&StreamError{
+					StreamID:  streamID,
+					ErrorCode: 1234,
+				}))
+			})
+
+			It("errors when receiving a RESET_STREAM with an inconsistent reliable sizes", func() {
+				mockFC.EXPECT().UpdateHighestReceived(protocol.ByteCount(42), true).Times(2)
+				rst.ReliableSize = 3
+				Expect(str.handleResetStreamFrame(rst)).To(Succeed())
+				rst.ReliableSize = 5
+				Expect(str.handleResetStreamFrame(rst)).To(MatchError("inconsistent reliable size received: 5 (was 3)"))
+			})
+		})
 	})
 
 	Context("flow control", func() {
