@@ -113,6 +113,24 @@ var _ = Describe("Frames", func() {
 		)
 	})
 
+	It("marshals RELIABLE_RESET_STREAM frames", func() {
+		check(
+			&logging.ResetStreamFrame{
+				StreamID:     987,
+				FinalSize:    1234,
+				ErrorCode:    42,
+				ReliableSize: 1337,
+			},
+			map[string]interface{}{
+				"frame_type":    "reliable_reset_stream",
+				"stream_id":     987,
+				"error_code":    42,
+				"final_size":    1234,
+				"reliable_size": 1337,
+			},
+		)
+	})
+
 	It("marshals STOP_SENDING frames", func() {
 		check(
 			&logging.StopSendingFrame{
