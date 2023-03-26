@@ -29,6 +29,9 @@ type sendStream struct {
 	numOutstandingFrames int64
 	retransmissionQueue  []*wire.StreamFrame
 
+	reliableSize                 protocol.ByteCount
+	sentReliableResetStreamFrame bool
+
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
@@ -37,7 +40,7 @@ type sendStream struct {
 
 	writeOffset protocol.ByteCount
 
-	cancelWriteErr      error
+	cancelWriteErr      *StreamError
 	closeForShutdownErr error
 
 	finishedWriting bool // set once Close() is called
@@ -200,10 +203,26 @@ func (s *sendStream) canBufferStreamFrame() bool {
 // maxBytes is the maximum length this frame (including frame header) will have.
 func (s *sendStream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.VersionNumber) (*ackhandler.Frame, bool /* has more data to send */) {
 	s.mutex.Lock()
+
+	if !s.finSent && s.cancelWriteErr != nil && s.reliableSize > 0 && s.writeOffset >= s.reliableSize && !s.sentReliableResetStreamFrame {
+		s.sender.queueControlFrame(&wire.ResetStreamFrame{
+			StreamID:     s.streamID,
+			FinalSize:    s.writeOffset,
+			ErrorCode:    s.cancelWriteErr.ErrorCode,
+			ReliableSize: s.reliableSize,
+		})
+		s.sentReliableResetStreamFrame = true
+		s.mutex.Unlock()
+		return nil, false
+	}
 	f, hasMoreData := s.popNewOrRetransmittedStreamFrame(maxBytes, v)
 	if f != nil {
 		s.numOutstandingFrames++
 	}
+	if s.cancelWriteErr != nil && s.reliableSize > 0 {
+		hasMoreData = true
+	}
+
 	s.mutex.Unlock()
 
 	if f == nil {
@@ -217,7 +236,7 @@ func (s *sendStream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Vers
 }
 
 func (s *sendStream) popNewOrRetransmittedStreamFrame(maxBytes protocol.ByteCount, v protocol.VersionNumber) (*wire.StreamFrame, bool /* has more data to send */) {
-	if s.cancelWriteErr != nil || s.closeForShutdownErr != nil {
+	if (s.cancelWriteErr != nil && s.reliableSize == 0) || s.closeForShutdownErr != nil {
 		return nil, false
 	}
 
@@ -231,6 +250,10 @@ func (s *sendStream) popNewOrRetransmittedStreamFrame(maxBytes protocol.ByteCoun
 			// This might be incorrect, in which case there'll be a spurious call to popStreamFrame in the future.
 			return f, true
 		}
+	}
+
+	if s.cancelWriteErr != nil && s.writeOffset >= s.reliableSize {
+		return nil, false
 	}
 
 	if len(s.dataForWriting) == 0 && s.nextFrame == nil {
@@ -381,15 +404,16 @@ func (s *sendStream) queueRetransmission(f wire.Frame) {
 	sf := f.(*wire.StreamFrame)
 	sf.DataLenPresent = true
 	s.mutex.Lock()
-	if s.cancelWriteErr != nil {
-		s.mutex.Unlock()
-		return
-	}
-	s.retransmissionQueue = append(s.retransmissionQueue, sf)
 	s.numOutstandingFrames--
 	if s.numOutstandingFrames < 0 {
 		panic("numOutStandingFrames negative")
 	}
+	// Check if the stream frame offset is within the reliableSize limit
+	if s.cancelWriteErr != nil && sf.Offset >= s.reliableSize {
+		s.mutex.Unlock()
+		return
+	}
+	s.retransmissionQueue = append(s.retransmissionQueue, sf)
 	s.mutex.Unlock()
 
 	s.sender.onHasStreamData(s.streamID)
@@ -426,6 +450,14 @@ func (s *sendStream) cancelWriteImpl(errorCode qerr.StreamErrorCode, remote bool
 	}
 	s.ctxCancel()
 	s.cancelWriteErr = &StreamError{StreamID: s.streamID, ErrorCode: errorCode, Remote: remote}
+
+	// the RELIABLE_RESET_STREAM will be enqueued by popStreamFrame
+	if s.reliableSize > 0 {
+		s.mutex.Unlock()
+		s.sender.onHasStreamData(s.streamID)
+		return
+	}
+
 	s.numOutstandingFrames = 0
 	s.retransmissionQueue = nil
 	newlyCompleted := s.isNewlyCompleted()
@@ -486,4 +518,15 @@ func (s *sendStream) signalWrite() {
 	case s.writeChan <- struct{}{}:
 	default:
 	}
+}
+
+func (s *sendStream) SetResetBarrier() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	rs := s.writeOffset + protocol.ByteCount(len(s.dataForWriting))
+	if s.nextFrame != nil {
+		rs += s.nextFrame.DataLen()
+	}
+	s.reliableSize = rs
 }
