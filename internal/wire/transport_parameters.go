@@ -45,6 +45,7 @@ const (
 	retrySourceConnectionIDParameterID         transportParameterID = 0x10
 	// RFC 9221
 	maxDatagramFrameSizeParameterID transportParameterID = 0x20
+	reliableStreamResets            transportParameterID = 0x727273
 )
 
 // PreferredAddress is the value encoding in the preferred_address transport parameter
@@ -328,6 +329,10 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	b = quicvarint.Append(b, uint64(length))
 	b = b[:len(b)+length]
 	rand.Read(b[len(b)-length:])
+
+	// TODO: make this configurable
+	b = quicvarint.Append(b, uint64(reliableStreamResets))
+	b = quicvarint.Append(b, 0)
 
 	// initial_max_stream_data_bidi_local
 	b = p.marshalVarintParam(b, initialMaxStreamDataBidiLocalParameterID, uint64(p.InitialMaxStreamDataBidiLocal))
